@@ -1,4 +1,3 @@
-import copy
 import sys
 import requests
 
@@ -19,40 +18,49 @@ class Landisk:
         login_data['csrfmiddlewaretoken'] = res_before_login.cookies.get('csrftoken')
 
         res_after_login = self.session.post(f'http://{self.ip_address}/login', data=login_data)
-        self.cookies = res_after_login.cookies
-
-        write_file('t1.html', res_after_login.content)
+        self.cookies = dict(res_after_login.cookies)
 
         if not self.is_logged_in():
             sys.exit(-2)
 
     def shutdown(self):
-        payload = copy.deepcopy(self.cookies)
-        payload['execute'] = "実行"
-        res_shutdown = self.session.post(f'http://{self.ip_address}/admin/system/power/shutdown/shutdownconfirm',
-                                             data=payload)
+        res_shutdown_page = self.session.get(f'http://{self.ip_address}/admin/system/power/shutdown/shutdownconfirm',
+                                             cookies=self.cookies)
+        if res_shutdown_page.status_code != 200:
+            print('Failed to retrieve shutdown page.')
+            sys.exit(-3)
+
+        self.cookies = dict(res_shutdown_page.cookies)
+
+        payload = {
+            'csrfmiddlewaretoken': self.cookies.get('csrftoken'),
+            'execute': '実行'
+        }
+
+        res_shutdown = self.session.post(f'http://{self.ip_address}/admin/system/power/shutdown/shutdownconfirm', cookies=self.cookies, data=payload)
         self.cookies = dict(res_shutdown.cookies)
-        if res_shutdown.status_code == 200:
-            print("Shutdown succeeded.")
-        else:
-            print('Shutdown failed.')
-        write_file('shutdown.txt', res_shutdown.content)
+        print("Shutdown succeeded, probably.")
 
     def reboot(self):
-        payload = copy.deepcopy(self.cookies)
-        payload['execute'] = "実行"
-        res_shutdown = self.session.post(f'http://{self.ip_address}/admin/system/power/shutdown/rebootconfirm',
-                                         data=payload)
-        self.cookies = dict(res_shutdown.cookies)
-        if res_shutdown.status_code == 200:
-            print("Reboot succeeded.")
-        else:
-            print('Reboot failed.')
-        write_file('reboot.txt', res_shutdown.content)
+        res_reboot_page = self.session.get(f'http://{self.ip_address}/admin/system/power/shutdown/rebootconfirm',
+                                             cookies=self.cookies)
+        if res_reboot_page.status_code != 200:
+            print('Failed to retrieve reboot page.')
+            sys.exit(-3)
+
+        self.cookies = dict(res_reboot_page.cookies)
+
+        payload = {
+            'csrfmiddlewaretoken': self.cookies.get('csrftoken'),
+            'execute': '実行'
+        }
+
+        res_reboot = self.session.post(f'http://{self.ip_address}/admin/system/power/shutdown/shutdownconfirm', cookies=self.cookies, data=payload)
+        self.cookies = dict(res_reboot.cookies)
+        print("Reboot succeeded, probably.")
 
     def is_logged_in(self):
         res_status = self.session.get(f'http://{self.ip_address}/admin/status', data=self.cookies)
-        self.cookies = dict(res_status.cookies)
 
         if res_status.status_code != 200:
             print("login failed.")
@@ -64,12 +72,6 @@ class Landisk:
     def get_status(self):
         res_status = self.session.get(f'http://{self.ip_address}/admin/status', data=self.cookies)
         self.cookies = dict(res_status.cookies)
-        write_file('status.txt', res_status.content)
-
-
-def write_file(name, content):
-    with open(name, 'wb') as f:
-        f.write(content)
 
 
 if __name__ == "__main__":
@@ -81,6 +83,4 @@ if __name__ == "__main__":
 
     ld = Landisk(arguments[1], arguments[2])
     ld.shutdown()
-
-    print()
 
